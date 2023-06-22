@@ -10,6 +10,12 @@ local ctx = {}
 local ch = {}
 ch.__index = ch
 
+local function P(p)
+  if vim.g.debug_call == true then
+    print(vim.inspect(p))
+  end
+end
+
 function ch.__newindex(t, k, v)
   rawset(t, k, v)
 end
@@ -51,6 +57,10 @@ end
 
 ---@private
 function ch:call_hierarchy(item, parent)
+  -- P({ item = item })
+  -- P({ parent = parent })
+  -- P({item = item})
+  -- P({parent = parent})
   local spinner = { '⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷' }
   local client = self.client
   local frame = 0
@@ -186,19 +196,87 @@ function ch:call_hierarchy(item, parent)
   end)
 end
 
-function ch:send_prepare_call()
+function ch:send_prepare_call() -- 3, main function
   if self.pending_request then
     vim.notify('there is already a request please wait.')
     return
   end
   self.main_buf = api.nvim_get_current_buf()
-
   local params = lsp.util.make_position_params()
+  -- P({ params = params })
   lsp.buf_request(0, get_method(1), params, function(_, result, data)
     local call_hierarchy_item = pick_call_hierarchy_item(result)
+    -- P({ result = result })
+    -- P({ call_hierarchy_item })
     self.client = lsp.get_client_by_id(data.client_id)
     self:call_hierarchy(call_hierarchy_item)
+    if not (call_hierarchy_item == nil) then
+      P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
+      self:expand_collapse_node(call_hierarchy_item[0])
+    end
   end)
+end
+
+function ch:expand_collapse_node(node)
+  if not node then
+    -- P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
+    return
+  end
+
+  P {node}
+
+  if not node.expand then
+    if not node.requested then
+      if not self.pending_request then
+        self:call_hierarchy(node.target, node)
+      end
+    else
+      node.name = node.name:gsub(ui.expand, ui.collapse)
+      node.highlights['SagaCollapse'] = { unpack(node.highlights['SagaExpand']) }
+      node.highlights['SagaExpand'] = nil
+      vim.bo.modifiable = true
+      api.nvim_buf_set_lines(self.bufnr, node.winline - 1, node.winline, false, {
+        node.name,
+      })
+      local tbl = {}
+      for i, v in ipairs(node.children) do
+        v.winline = node.winline + i
+        insert(tbl, v.name)
+      end
+      node.expand = true
+      api.nvim_buf_set_lines(self.bufnr, node.winline, node.winline, false, tbl)
+      for group, scope in pairs(node.highlights) do
+        api.nvim_buf_add_highlight(self.bufnr, 0, group, node.winline - 1, scope[1], scope[2])
+      end
+      vim.bo.modifiable = false
+      for _, child in pairs(node.children) do
+        for group, scope in pairs(child.highlights) do
+          api.nvim_buf_add_highlight(self.bufnr, 0, group, child.winline - 1, scope[1], scope[2])
+        end
+      end
+      self:change_node_winline(node, #node.children)
+    end
+    return
+  end
+
+  local cur_line = api.nvim_win_get_cursor(0)[1]
+  local text = api.nvim_get_current_line()
+  text = text:gsub(ui.collapse, ui.expand)
+  vim.bo[self.bufnr].modifiable = true
+  api.nvim_buf_set_lines(self.bufnr, cur_line - 1, cur_line + #node.children, false, { text })
+  node.expand = false
+  vim.bo[self.bufnr].modifiable = false
+  node.highlights['SagaExpand'] = { unpack(node.highlights['SagaCollapse']) }
+  node.highlights['SagaCollapse'] = nil
+
+  for group, scope in pairs(node.highlights) do
+    api.nvim_buf_add_highlight(self.bufnr, 0, group, cur_line - 1, scope[1], scope[2])
+  end
+
+  for _, v in pairs(node.children) do
+    v.winline = -1
+  end
+  self:change_node_winline(node, - #node.children)
 end
 
 function ch:expand_collapse()
@@ -258,7 +336,7 @@ function ch:expand_collapse()
   for _, v in pairs(node.children) do
     v.winline = -1
   end
-  self:change_node_winline(node, -#node.children)
+  self:change_node_winline(node, - #node.children)
 end
 
 function ch:apply_map()
@@ -509,7 +587,7 @@ function ch:preview()
     api.nvim_win_set_config(self.preview_winid, {
       title = {
         { icon[1] and icon[1] .. ' ' or '', icon[2] or 'TitleString' },
-        { path[#path], 'TitleString' },
+        { path[#path],                      'TitleString' },
       },
       title_pos = 'center',
     })
@@ -529,11 +607,11 @@ function ch:preview()
   api.nvim_set_option_value('winbar', '', { scope = 'local', win = self.preview_winid })
 end
 
-function ch:send_method(type)
+function ch:send_method(type)    -- 1
   self.cword = fn.expand('<cword>')
-  self.method = get_method(type)
+  self.method = get_method(type) -- 2
   self.data = {}
-  self:send_prepare_call()
+  self:send_prepare_call()       -- 3
 end
 
 return setmetatable(ctx, ch)
