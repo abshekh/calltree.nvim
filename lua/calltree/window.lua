@@ -256,7 +256,11 @@ function M.create_win_with_border(content_opts, opts)
     api.nvim_set_option_value('buftype', content_opts.buftype or 'nofile', { buf = bufnr })
   end
 
-  local winid = api.nvim_open_win(bufnr, enter, opts)
+  vim.cmd('10split')
+  -- local winid = api.nvim_open_win(bufnr, enter, opts)
+  local winid = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(winid, bufnr)
+
   api.nvim_set_option_value(
     'winblend',
     content_opts.winblend or config.ui.winblend,

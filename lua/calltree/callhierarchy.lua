@@ -125,6 +125,8 @@ function ch:call_hierarchy(item, parent)
       return
     end
 
+    -- P {res}
+
     local kind = require('calltree.lspkind').get_kind()
     if not parent then
       local icons = {}
@@ -135,7 +137,7 @@ function ch:call_hierarchy(item, parent)
         local icon = kind[target.kind][2]
         insert(self.data, {
           target = target,
-          name = expand_collapse .. icon .. target.name,
+          name = expand_collapse .. icon .. target.name .. " (" .. target.detail .. ")",
           highlights = {
             ['SagaCollapse'] = { 0, #expand_collapse },
             ['LSOutline' .. kind[target.kind][1]] = { #expand_collapse, #expand_collapse + #icon },
@@ -154,6 +156,7 @@ function ch:call_hierarchy(item, parent)
     parent.requested = true
     parent.expand = true
     parent.name = parent.name:gsub(ui.expand, ui.collapse)
+    P {parent}
     api.nvim_buf_set_lines(self.bufnr, parent.winline - 1, parent.winline, false, {
       parent.name,
     })
@@ -168,7 +171,7 @@ function ch:call_hierarchy(item, parent)
       local icon = kind[target.kind][2]
       insert(parent.children, {
         target = target,
-        name = expand_collapse .. icon .. target.name,
+        name = expand_collapse .. icon .. target.name .. " (" .. target.detail .. ")",
         highlights = {
           ['SagaCollapse'] = { 0, #expand_collapse },
           ['LSOutline' .. kind[target.kind][1]] = { #expand_collapse, #expand_collapse + #icon },
@@ -178,7 +181,7 @@ function ch:call_hierarchy(item, parent)
         children = {},
         requested = false,
       })
-      insert(tbl, expand_collapse .. icon .. target.name)
+      insert(tbl, expand_collapse .. icon .. target.name .. " (" .. target.detail .. ")")
     end
 
     api.nvim_buf_set_lines(self.bufnr, parent.winline, parent.winline, false, tbl)
@@ -207,11 +210,12 @@ function ch:send_prepare_call() -- 3, main function
   lsp.buf_request(0, get_method(1), params, function(_, result, data)
     local call_hierarchy_item = pick_call_hierarchy_item(result)
     -- P({ result = result })
-    -- P({ call_hierarchy_item })
+    P({ send_prepare_call_call_hierarchy_item = call_hierarchy_item })
+    self.cword = self.cword .. " (" .. (call_hierarchy_item or {detail = ""}).detail .. ")"
     self.client = lsp.get_client_by_id(data.client_id)
     self:call_hierarchy(call_hierarchy_item)
     if not (call_hierarchy_item == nil) then
-      P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
+      -- P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
       self:expand_collapse_node(call_hierarchy_item[0])
     end
   end)
@@ -402,12 +406,11 @@ end
 
 function ch:render_win()
   local content = {}
+  -- P {render_win = self.cword}
   insert(content, self.cword)
-
   for _, v in pairs(self.data) do
     insert(content, v.name)
   end
-
   local side_char = window.border_chars()['top'][config.ui.border]
   local content_opt = {
     contents = content,
@@ -456,9 +459,13 @@ function ch:render_win()
   api.nvim_win_set_cursor(self.winid, { 2, 9 })
   api.nvim_create_autocmd('CursorMoved', {
     buffer = self.bufnr,
-    callback = function()
-      self:preview()
+    callback = function ()
+      self:get_node_at_cursor()
     end,
+    -- disable preview window
+    -- callback = function()
+    --   self:preview()
+    -- end,
   })
 
   api.nvim_buf_add_highlight(self.bufnr, 0, 'LSOutlinePackage', 0, 0, -1)
@@ -611,6 +618,7 @@ function ch:send_method(type)    -- 1
   self.cword = fn.expand('<cword>')
   self.method = get_method(type) -- 2
   self.data = {}
+  P {send_method_data = self.data}
   self:send_prepare_call()       -- 3
 end
 
