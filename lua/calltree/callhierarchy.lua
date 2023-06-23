@@ -376,7 +376,7 @@ function ch:apply_map()
   end, opt)
 
   for action, key in pairs({
-    edit = keys.edit,
+    -- edit = keys.edit,
     vsplit = keys.vsplit,
     split = keys.split,
     tabe = keys.tabe,
@@ -386,20 +386,20 @@ function ch:apply_map()
       if not node then
         return
       end
-      if api.nvim_win_is_valid(self.winid) then
-        api.nvim_win_close(self.winid, true)
-      end
-      if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
-        api.nvim_win_close(self.preview_winid, true)
-      end
+      -- if api.nvim_win_is_valid(self.winid) then
+      --   api.nvim_win_close(self.winid, true)
+      -- end
+      -- if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
+      --   api.nvim_win_close(self.preview_winid, true)
+      -- end
       vim.cmd(action .. ' ' .. vim.uri_to_fname(node.target.uri))
       api.nvim_win_set_cursor(
         0,
         { node.target.selectionRange.start.line + 1, node.target.selectionRange.start.character }
       )
-      local width = #api.nvim_get_current_line()
-      libs.jump_beacon({ node.target.selectionRange.start.line, 0 }, width)
-      clean_ctx()
+      -- local width = #api.nvim_get_current_line()
+      -- libs.jump_beacon({ node.target.selectionRange.start.line, 0 }, width)
+      -- clean_ctx()
     end, opt)
   end
 end
@@ -581,7 +581,18 @@ function ch:preview()
   local data = get_preview_data(node)
   if not data or not data.bufnr then
     return
+  else
+    local file_name = node.target.uri
+    local line_num = node.target.selectionRange.start.line
+    print("vsplit | e +" .. line_num .. " " .. file_name)
+    -- vim.cmd("vsplit | e +" .. line_num .. " " .. file_name)
+    -- local bufnr = api.nvim_create_buf(true, true)
+    -- vim.cmd('vsplit')
+    -- self.preview_winid = self.preview_winid or vim.api.nvim_get_current_win()
+    -- vim.api.nvim_win_set_buf(self.preview_winid, bufnr)
+    return
   end
+
 
   if not self.preview_winid or not api.nvim_win_is_valid(self.preview_winid) then
     self.preview_bufnr, self.preview_winid = create_preview_window(self.winid)

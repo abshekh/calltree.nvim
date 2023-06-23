@@ -118,13 +118,13 @@ local default_config = {
   callhierarchy = {
     show_detail = false,
     keys = {
-      edit = 'e',
-      vsplit = 's',
+      -- edit = 'e',
+      vsplit = '<CR>',
       split = 'i',
       tabe = 't',
       jump = 'o',
       quit = 'q',
-      expand_collapse = 'u',
+      expand_collapse = 'l',
     },
   },
   beacon = {
