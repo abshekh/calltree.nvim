@@ -9,3 +9,4 @@ created this repo because couldn't get LSP Saga callheirarchy to work properly a
 - remove unused shortcuts
 - add highlights
 - on collapsing a node, its children are not getting collapsed
+- remove libs.jump_beacon

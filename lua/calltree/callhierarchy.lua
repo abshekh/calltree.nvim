@@ -57,10 +57,6 @@ end
 
 ---@private
 function ch:call_hierarchy(item, parent)
-  -- P({ item = item })
-  -- P({ parent = parent })
-  -- P({item = item})
-  -- P({parent = parent})
   local spinner = { '⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷' }
   local client = self.client
   local frame = 0
@@ -125,8 +121,6 @@ function ch:call_hierarchy(item, parent)
       return
     end
 
-    -- P {res}
-
     local kind = require('calltree.lspkind').get_kind()
     if not parent then
       local icons = {}
@@ -148,7 +142,7 @@ function ch:call_hierarchy(item, parent)
           requested = false,
         })
       end
-      self:render_win()
+      self:render_calltree_win()
       return
     end
 
@@ -215,7 +209,6 @@ function ch:send_prepare_call() -- 3, main function
     self.client = lsp.get_client_by_id(data.client_id)
     self:call_hierarchy(call_hierarchy_item)
     if not (call_hierarchy_item == nil) then
-      -- P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
       self:expand_collapse_node(call_hierarchy_item[0])
     end
   end)
@@ -223,11 +216,8 @@ end
 
 function ch:expand_collapse_node(node)
   if not node then
-    -- P({here = "call_hierarchy_item is not nil", call_hierarchy_item = call_hierarchy_item[0]})
     return
   end
-
-  P {node}
 
   if not node.expand then
     if not node.requested then
@@ -376,7 +366,6 @@ function ch:apply_map()
   end, opt)
 
   for action, key in pairs({
-    -- edit = keys.edit,
     vsplit = keys.vsplit,
     split = keys.split,
     tabe = keys.tabe,
@@ -386,46 +375,80 @@ function ch:apply_map()
       if not node then
         return
       end
-      -- if api.nvim_win_is_valid(self.winid) then
-      --   api.nvim_win_close(self.winid, true)
-      -- end
-      -- if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
-      --   api.nvim_win_close(self.preview_winid, true)
-      -- end
+      if api.nvim_win_is_valid(self.winid) then
+        api.nvim_win_close(self.winid, true)
+      end
+      if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
+        api.nvim_win_close(self.preview_winid, true)
+      end
       vim.cmd(action .. ' ' .. vim.uri_to_fname(node.target.uri))
       api.nvim_win_set_cursor(
         0,
         { node.target.selectionRange.start.line + 1, node.target.selectionRange.start.character }
       )
-      -- local width = #api.nvim_get_current_line()
-      -- libs.jump_beacon({ node.target.selectionRange.start.line, 0 }, width)
-      -- clean_ctx()
+      local width = #api.nvim_get_current_line()
+      libs.jump_beacon({ node.target.selectionRange.start.line, 0 }, width)
+      clean_ctx()
     end, opt)
   end
 end
 
-function ch:render_win()
+function ch:apply_calltree_map()
+  local keys = call_conf.keys
+  local keymap = vim.keymap.set
+  local opt = { buffer = true, nowait = true }
+
+  keymap('n', keys.hover, function()
+      self:preview()
+  end, { buffer = true, nowait = true })
+
+  keymap('n', keys.quit, function()
+    if self.winid and api.nvim_win_is_valid(self.winid) then
+      api.nvim_win_close(self.winid, true)
+      if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
+        api.nvim_win_close(self.preview_winid, true)
+      end
+      clean_ctx()
+    end
+  end, opt)
+
+  keymap('n', keys.expand_collapse, function()
+    self:expand_collapse()
+  end, opt)
+
+  for action, key in pairs({
+    vsplit = keys.vsplit,
+    split = keys.split,
+    tabe = keys.tabe,
+  }) do
+    vim.keymap.set('n', key, function()
+      local node = self:get_node_at_cursor()
+      if not node then
+        return
+      end
+      vim.cmd(action .. ' ' .. vim.uri_to_fname(node.target.uri))
+      api.nvim_win_set_cursor(
+        0,
+        { node.target.selectionRange.start.line + 1, node.target.selectionRange.start.character }
+      )
+    end, opt)
+  end
+end
+
+function ch:render_calltree_win()
   local content = {}
-  -- P {render_win = self.cword}
   insert(content, self.cword)
   for _, v in pairs(self.data) do
     insert(content, v.name)
   end
-  local side_char = window.border_chars()['top'][config.ui.border]
   local content_opt = {
     contents = content,
-    filetype = 'lspsagacallhierarchy',
+    filetype = 'calltreecallhierarchy',
     buftype = 'nofile',
-    enter = true,
-    border_side = {
-      ['right'] = ' ',
-      ['righttop'] = side_char,
-      ['rightbottom'] = side_char,
-    },
-    highlight = {
-      normal = 'CallHierarchyNormal',
-      border = 'CallHierarchyBorder',
-    },
+  }
+
+  local opt = {
+    col = 10,
   }
 
   local cur_winline = fn.winline()
@@ -436,37 +459,8 @@ function ch:render_win()
     api.nvim_feedkeys(keycode, 'x', false)
   end
 
-  local opt = {
-    relative = 'win',
-    win = api.nvim_get_current_win(),
-    row = fn.winline() + 1,
-    col = 10,
-    height = math.floor(vim.o.lines * 0.4),
-    width = math.floor(vim.o.columns * 0.3),
-    no_size_override = true,
-  }
-
-  if fn.has('nvim-0.9') == 1 and config.ui.title then
-    local icon = self.method == 'callHierarchy/incomingCalls' and ui.incoming or ui.outgoing
-    opt.title = {
-      { icon, 'ArrowIcon' },
-    }
-    opt.title_pos = 'center'
-    api.nvim_set_hl(0, 'ArrowIcon', { link = 'CallHierarchyBorder' })
-  end
-
-  self.bufnr, self.winid = window.create_win_with_border(content_opt, opt)
+  self.bufnr, self.winid = window.create_split_win(content_opt, opt)
   api.nvim_win_set_cursor(self.winid, { 2, 9 })
-  api.nvim_create_autocmd('CursorMoved', {
-    buffer = self.bufnr,
-    callback = function ()
-      self:get_node_at_cursor()
-    end,
-    -- disable preview window
-    -- callback = function()
-    --   self:preview()
-    -- end,
-  })
 
   api.nvim_buf_add_highlight(self.bufnr, 0, 'LSOutlinePackage', 0, 0, -1)
 
@@ -476,7 +470,16 @@ function ch:render_win()
     end
   end
 
-  self:apply_map()
+  api.nvim_create_autocmd('CursorMoved', {
+    buffer = self.bufnr,
+    callback = function ()
+      if self.preview_winid and api.nvim_win_is_valid(self.preview_winid) then
+        api.nvim_win_close(self.preview_winid, true)
+      end
+    end,
+  })
+
+  self:apply_calltree_map()
 end
 
 ---@private
@@ -546,26 +549,19 @@ local function get_preview_data(node)
   return { bufnr = bufnr, range = range }
 end
 
-local function create_preview_window(winid)
-  local winconfig = api.nvim_win_get_config(winid)
+local function create_preview_window()
   local opt = {
-    relative = winconfig.relative,
-    win = winconfig.win,
-    row = winconfig.row[false],
-    height = winconfig.height,
-    col = winconfig.col[false] + winconfig.width + 2,
+    relative = 'editor',
+    win = api.nvim_get_current_win(),
+    row = fn.winline() + 1,
+    col = 10,
+    height = math.floor(vim.o.lines * 0.4),
+    width = math.floor(vim.o.columns * 0.6),
     no_size_override = true,
   }
-  opt.width = vim.o.columns - opt.col - 6
 
-  local rtop = window.combine_char()['righttop'][config.ui.border]
-  local rbottom = window.combine_char()['rightbottom'][config.ui.border]
   local content_opt = {
     contents = {},
-    border_side = {
-      ['lefttop'] = rtop,
-      ['leftbottom'] = rbottom,
-    },
     enter = false,
   }
 
@@ -581,21 +577,10 @@ function ch:preview()
   local data = get_preview_data(node)
   if not data or not data.bufnr then
     return
-  else
-    local file_name = node.target.uri
-    local line_num = node.target.selectionRange.start.line
-    print("vsplit | e +" .. line_num .. " " .. file_name)
-    -- vim.cmd("vsplit | e +" .. line_num .. " " .. file_name)
-    -- local bufnr = api.nvim_create_buf(true, true)
-    -- vim.cmd('vsplit')
-    -- self.preview_winid = self.preview_winid or vim.api.nvim_get_current_win()
-    -- vim.api.nvim_win_set_buf(self.preview_winid, bufnr)
-    return
   end
 
-
   if not self.preview_winid or not api.nvim_win_is_valid(self.preview_winid) then
-    self.preview_bufnr, self.preview_winid = create_preview_window(self.winid)
+    self.preview_bufnr, self.preview_winid = create_preview_window()
   end
 
   api.nvim_win_set_buf(self.preview_winid, data.bufnr)

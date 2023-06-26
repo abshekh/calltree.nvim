@@ -231,7 +231,6 @@ function M.create_win_with_border(content_opts, opts)
 
   -- create contents buffer
   local bufnr = content_opts.bufnr or api.nvim_create_buf(false, false)
-  -- local bufnr = content_opts.bufnr or api.nvim_create_buf(true, true)
   -- buffer settings for contents buffer
   -- Clean up input: trim empty lines from the end, pad
   local content = lsp.util._trim(contents)
@@ -257,10 +256,7 @@ function M.create_win_with_border(content_opts, opts)
     api.nvim_set_option_value('buftype', content_opts.buftype or 'nofile', { buf = bufnr })
   end
 
-  vim.cmd('10split')
-  -- local winid = api.nvim_open_win(bufnr, enter, opts)
-  local winid = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(winid, bufnr)
+  local winid = api.nvim_open_win(bufnr, enter, opts)
 
   api.nvim_set_option_value(
     'winblend',
@@ -276,6 +272,49 @@ function M.create_win_with_border(content_opts, opts)
   )
 
   api.nvim_set_option_value('winbar', '', { scope = 'local', win = winid })
+  return bufnr, winid
+end
+
+function M.create_split_win(content_opts, opts)
+  vim.validate({
+    content_opts = { content_opts, 't' },
+    contents = { content_opts.content, 't', true },
+    opts = { opts, 't', true },
+  })
+
+  local contents, filetype = content_opts.contents, content_opts.filetype
+  opts = opts or {}
+
+  -- create contents buffer
+  local bufnr = content_opts.bufnr or api.nvim_create_buf(false, false)
+  local content = lsp.util._trim(contents)
+
+  if filetype then
+    api.nvim_buf_set_option(bufnr, 'filetype', filetype)
+  end
+
+  content = vim.tbl_flatten(vim.tbl_map(function(line)
+    if string.find(line, '\n') then
+      return vim.split(line, '\n')
+    end
+    return line
+  end, content))
+
+  if not vim.tbl_isempty(content) then
+    api.nvim_buf_set_lines(bufnr, 0, -1, true, content)
+  end
+
+  if not content_opts.bufnr then
+    api.nvim_set_option_value('modifiable', false, { buf = bufnr })
+    api.nvim_set_option_value('bufhidden', content_opts.bufhidden or 'wipe', { buf = bufnr })
+    api.nvim_set_option_value('buftype', content_opts.buftype or 'nofile', { buf = bufnr })
+  end
+
+  vim.cmd(opts.col .. 'split')
+  local winid = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(winid, bufnr)
+
+  api.nvim_set_option_value('wrap', content_opts.wrap or false, { scope = 'local', win = winid })
   return bufnr, winid
 end
 
